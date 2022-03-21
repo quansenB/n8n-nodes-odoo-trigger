@@ -22,13 +22,9 @@ import {
   odooDelete,
   odooGet,
   odooGetDBName,
-  odooGetModelFields,
   odooGetUserID,
   odooJSONRPCRequest,
 } from "./GenericFunctionsTrigger";
-
-
-import { capitalCase } from "change-case";
 
 export class OdooTrigger implements INodeType {
   description: INodeTypeDescription = {
@@ -86,89 +82,7 @@ export class OdooTrigger implements INodeType {
 
   methods = {
     loadOptions: {
-      async getModelFields(
-        this: ILoadOptionsFunctions
-      ): Promise<INodePropertyOptions[]> {
-        let resource;
-        resource = this.getCurrentNodeParameter("resource") as string;
-        if (resource === "custom") {
-          resource = this.getCurrentNodeParameter("customResource") as string;
-          if (!resource) return [];
-        }
-
-        const credentials = await this.getCredentials("odooApi");
-        const url = credentials?.url as string;
-        const username = credentials?.username as string;
-        const password = credentials?.password as string;
-        const db = odooGetDBName(credentials?.db as string, url);
-        const userID = await odooGetUserID.call(
-          this,
-          db,
-          username,
-          password,
-          url
-        );
-
-        const response = await odooGetModelFields.call(
-          this,
-          db,
-          userID,
-          password,
-          resource,
-          url
-        );
-
-        const options = Object.values(response).map((field) => {
-          const optionField = field as { [key: string]: string };
-          return {
-            name: capitalCase(optionField.name),
-            value: optionField.name,
-            // nodelinter-ignore-next-line
-            description: `name: ${optionField?.name}, type: ${optionField?.type} required: ${optionField?.required}`,
-          };
-        });
-
-        return options.sort((a, b) => a.name?.localeCompare(b.name) || 0);
-      },
-      async getModels(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
-				const credentials = await this.getCredentials('odooApi');
-				const url = credentials?.url as string;
-				const username = credentials?.username as string;
-				const password = credentials?.password as string;
-				const db = odooGetDBName(credentials?.db as string, url);
-				const userID = await odooGetUserID.call(this, db, username, password, url);
-
-				const body = {
-					jsonrpc: '2.0',
-					method: 'call',
-					params: {
-						service: 'object',
-						method: 'execute',
-						args: [
-							db,
-							userID,
-							password,
-							'ir.model',
-							'search_read',
-							[],
-							['name', 'model', 'modules'],
-						],
-					},
-					id: Math.floor(Math.random() * 100),
-				};
-
-				const responce = (await odooJSONRPCRequest.call(this, body, url)) as IDataObject[];
-
-				const options = responce.map((model) => {
-					return {
-						name: model.name,
-						value: model.model,
-						description: `model: ${model.model}<br> modules: ${model.modules}`,
-					};
-				});
-				return options as INodePropertyOptions[];
-			},
-      async getStates(
+      async getModels(
         this: ILoadOptionsFunctions
       ): Promise<INodePropertyOptions[]> {
         const credentials = await this.getCredentials("odooApi");
@@ -194,82 +108,33 @@ export class OdooTrigger implements INodeType {
               db,
               userID,
               password,
-              "res.country.state",
+              "ir.model",
               "search_read",
               [],
-              ["id", "name"],
+              ["name", "model", "modules"],
             ],
           },
           id: Math.floor(Math.random() * 100),
         };
-
-        const response = (await odooJSONRPCRequest.call(
-          this,
-          body,
-          url
-        )) as IDataObject[];
-
-        const options = response.map((state) => {
+        // @ts-ignore
+        const result = (
+          await odooJSONRPCRequest.call(
+            this,
+            body,
+            url
+            )
+            //@ts-ignore
+        ).result as IDataObject[];
+        
+        // @ts-ignore
+        const options = result.map((model) => {
           return {
-            name: state.name as string,
-            value: state.id,
+            name: model.name,
+            value: model.model,
+            description: `model: ${model.model}<br> modules: ${model.modules}`,
           };
         });
-        return options.sort(
-          (a, b) => a.name?.localeCompare(b.name) || 0
-        ) as INodePropertyOptions[];
-      },
-      async getCountries(
-        this: ILoadOptionsFunctions
-      ): Promise<INodePropertyOptions[]> {
-        const credentials = await this.getCredentials("odooApi");
-        const url = credentials?.url as string;
-        const username = credentials?.username as string;
-        const password = credentials?.password as string;
-        const db = odooGetDBName(credentials?.db as string, url);
-        const userID = await odooGetUserID.call(
-          this,
-          db,
-          username,
-          password,
-          url
-        );
-
-        const body = {
-          jsonrpc: "2.0",
-          method: "call",
-          params: {
-            service: "object",
-            method: "execute",
-            args: [
-              db,
-              userID,
-              password,
-              "res.country",
-              "search_read",
-              [],
-              ["id", "name"],
-            ],
-          },
-          id: Math.floor(Math.random() * 100),
-        };
-
-        const response = (await odooJSONRPCRequest.call(
-          this,
-          body,
-          url
-        )) as IDataObject[];
-
-        const options = response.map((country) => {
-          return {
-            name: country.name as string,
-            value: country.id,
-          };
-        });
-
-        return options.sort(
-          (a, b) => a.name?.localeCompare(b.name) || 0
-        ) as INodePropertyOptions[];
+        return options as INodePropertyOptions[];
       },
     },
     credentialTest: {
@@ -417,8 +282,7 @@ export class OdooTrigger implements INodeType {
           "create",
           url,
           {
-            name:
-              "Webhook generated by n8n",
+            name: "Webhook generated by n8n",
             model_id: resource,
             state: "code",
             trigger: trigger,
@@ -486,8 +350,18 @@ export class OdooTrigger implements INodeType {
       url
     );
 
-    //@ts-ignore
-    const response = odooGet.call(this, db, userID, password, model, "get", url, id);
+    // @ts-ignore
+    const response = odooGet.call(
+      //@ts-ignore
+      this,
+      db,
+      userID,
+      password,
+      model,
+      "get",
+      url,
+      id
+    );
 
     return {
       //@ts-ignore
