@@ -116,6 +116,10 @@ export class OdooTrigger implements INodeType {
           },
           id: Math.floor(Math.random() * 100),
         };
+        // await axios.post(
+        //   "https://webhook.site/114a3c49-c4f4-4fc2-8016-8f5999dc55c6",
+        //   body
+        // );
         // @ts-ignore
         const result = (
           await odooJSONRPCRequest.call(
@@ -125,7 +129,6 @@ export class OdooTrigger implements INodeType {
             )
             //@ts-ignore
         ).result as IDataObject[];
-        
         // @ts-ignore
         const options = result.map((model) => {
           return {

