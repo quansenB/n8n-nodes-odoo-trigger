@@ -2,8 +2,6 @@ import { IHookFunctions, IWebhookFunctions } from "n8n-core";
 
 import { OptionsWithUri } from "request";
 
-import axios from "axios";
-
 import {
   IDataObject,
   INodeType,
@@ -72,7 +70,7 @@ export class OdooTrigger implements INodeType {
         options: [
           { name: "On Create", value: "on_create" },
           { name: "On Update", value: "on_write" },
-          { name: "On Create And Update", value: "on_creat_or_write" },
+          { name: "On Create And Update", value: "on_create_or_write" },
           { name: "On Delete", value: "on_unlink" },
         ],
         description: "The method the webhook should trigger.",
@@ -116,24 +114,16 @@ export class OdooTrigger implements INodeType {
           },
           id: Math.floor(Math.random() * 100),
         };
-        // await axios.post(
-        //   "https://webhook.site/114a3c49-c4f4-4fc2-8016-8f5999dc55c6",
-        //   body
-        // );
+        const response = (await odooJSONRPCRequest.call(
+          this,
+          body,
+          url
+        )) as IDataObject[];
         // @ts-ignore
-        const result = (
-          await odooJSONRPCRequest.call(
-            this,
-            body,
-            url
-            )
-            //@ts-ignore
-        ).result as IDataObject[];
-        // @ts-ignore
-        const options = result.map((model) => {
+        const options = response.result.map((model) => {
           return {
             name: model.name,
-            value: model.model,
+            value: model.id,
             description: `model: ${model.model}<br> modules: ${model.modules}`,
           };
         });
@@ -208,9 +198,11 @@ export class OdooTrigger implements INodeType {
   webhookMethods = {
     default: {
       async checkExists(this: IHookFunctions): Promise<boolean> {
-        // Check all the webhooks which exist already if it is identical to the
-        // one that is supposed to get created.
-        const resource = "base.automation";
+        const webhookData = this.getWorkflowStaticData("node");
+
+        if (webhookData.webhookId === undefined) {
+          return false;
+        }
 
         const credentials = await this.getCredentials("odooApi");
         const url = credentials?.url as string;
@@ -225,28 +217,12 @@ export class OdooTrigger implements INodeType {
           url
         );
 
-        // const webhookData = this.getWorkflowStaticData("node");
-        // if (webhookData.webhookId === undefined) {
-        //   return false;
-        // }
+        const response = await odooGet.call(this, db, userID, password, "base.automation", "get", url, webhookData.webhookId?.toString() as string);
 
-        // const responseData = await odooGetAll.call(
-        //   this,
-        //   db,
-        //   userID,
-        //   password,
-        //   resource,
-        //   "getAll",
-        //   url
-        // );
+        // @ts-ignore
+        const exists = response.result.length > 0;
 
-        // // @ts-ignore
-        // for (const webhook of responseData) {
-        //   if (webhookData.webhookId === webhook.id) {
-        //     return true;
-        //   }
-        // }
-        return false;
+        return exists;
       },
       async create(this: IHookFunctions): Promise<boolean> {
         const webhookUrl = this.getNodeWebhookUrl("default") as string;
@@ -276,7 +252,7 @@ export class OdooTrigger implements INodeType {
         );
 
         //@ts-ignore
-        const response = odooCreate.call(
+        const response = await odooCreate.call(
           this,
           db,
           userID,
@@ -289,86 +265,54 @@ export class OdooTrigger implements INodeType {
             model_id: resource,
             state: "code",
             trigger: trigger,
-            code: "print('test')",
+            code: `make_request("POST", "${webhookUrl}", data=(json.dumps(record.read()[0], indent=4, sort_keys=True, default=str)), headers={"Content-Type": "application/json"})`,
           }
         );
 
-        // const endpoint = "/webhook/subscribe";
+        // @ts-ignore
+        webhookData.webhookId = response.result;
 
-        // const body = {
-        //   webhook_url: webhookUrl,
-        //   subscriptions: events,
-        // };
-
-        // const responseData = await odooApiRequest.call(this, 'POST', endpoint, body);
-
-        // if (responseData.id === undefined) {
-        // 	// Required data is missing so was not successful
-        // 	return false;
-        // }
-
-        // const webhookData = this.getWorkflowStaticData('node');
-        // webhookData.webhookId = responseData.id as string;
         return true;
       },
       async delete(this: IHookFunctions): Promise<boolean> {
-        // const webhookData = this.getWorkflowStaticData('node');
-        // if (webhookData.webhookId !== undefined) {
+        const webhookData = this.getWorkflowStaticData("node");
 
-        // 	const endpoint = `/webhook/${webhookData.webhookId}`;
+        if (webhookData.webhookId === undefined) {
+          return false;
+        }
 
-        // 	const responseData = await odooApiRequest.call(this, 'DELETE', endpoint);
+        const credentials = await this.getCredentials("odooApi");
+        const url = credentials?.url as string;
+        const username = credentials?.username as string;
+        const password = credentials?.password as string;
+        const db = odooGetDBName(credentials?.db as string, url);
+        const userID = await odooGetUserID.call(
+          this,
+          db,
+          username,
+          password,
+          url
+        );
 
-        // 	if (!responseData.success) {
-        // 		return false;
-        // 	}
-        // 	// Remove from the static workflow data so that it is clear
-        // 	// that no webhooks are registred anymore
-        // 	delete webhookData.webhookId;
-        // }
-        return true;
+        const response = await odooDelete.call(this, db, userID, password, "base.automation", "delete", url, webhookData.webhookId?.toString() as string);
+
+        return response.success
       },
     },
   };
 
   async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
+    const returnData = [] as IDataObject[];
     const bodyData = this.getBodyData();
 
-    //@ts-ignore
-    let model = bodyData.content.split("(")[0];
-    //@ts-ignore
-    let id = bodyData.content.split("(")[1].split(",")[0];
-
-    const credentials = await this.getCredentials("odooApi");
-    const url = credentials?.url as string;
-    const username = credentials?.username as string;
-    const password = credentials?.password as string;
-    const db = odooGetDBName(credentials?.db as string, url);
-    const userID = await odooGetUserID.call(
-      //@ts-ignore
-      this,
-      db,
-      username,
-      password,
-      url
-    );
-
-    // @ts-ignore
-    const response = odooGet.call(
-      //@ts-ignore
-      this,
-      db,
-      userID,
-      password,
-      model,
-      "get",
-      url,
-      id
-    );
+    if (Array.isArray(bodyData)) {
+      returnData.push.apply(returnData, bodyData as IDataObject[]);
+    } else {
+      returnData.push(bodyData as IDataObject);
+    }
 
     return {
-      //@ts-ignore
-      workflowData: [this.helpers.returnJsonArray(response)],
+      workflowData: [this.helpers.returnJsonArray(returnData)],
     };
   }
 }
