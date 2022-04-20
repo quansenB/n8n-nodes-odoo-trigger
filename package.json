@@ -38,8 +38,7 @@
       "dist/credentials/OdooApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/Odoo/OdooTrigger.node.js",
-      "dist/nodes/Odoo/Odoo.node.js"
+      "dist/nodes/OdooTrigger/OdooTrigger.node.js"
     ]
   },
   "devDependencies": {
